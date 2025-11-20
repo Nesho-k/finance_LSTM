@@ -15,7 +15,7 @@ from pathlib import Path
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0=all, 1=info, 2=warning, 3=error only --> pour ne plus avoir les warnings TensorFlow
 
-from inference import WeatherForecaster, MODELS_DIR, CITIES
+from src.inference import WeatherForecaster, MODELS_DIR, CITIES
 
 # Configuration du logging
 logging.basicConfig(

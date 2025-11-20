@@ -13,7 +13,7 @@ from tensorflow import keras
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0=all, 1=info, 2=warning, 3=error only --> pour ne plus avoir les warnings TensorFlow
 
-from features import build_feature_matrix
+from src.features import build_feature_matrix
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent  # meteo_app/

@@ -9,4 +9,6 @@ services:
         value: 3.11.0
       - key: TF_CPP_MIN_LOG_LEVEL
         value: 2
+      - key: PYTHONPATH
+        value: /opt/render/project/src
     healthCheckPath: /health

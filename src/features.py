@@ -7,7 +7,7 @@ import requests, pandas as pd, numpy as np, json
 from datetime import date, timedelta
 from pathlib import Path
 
-from data import fetch_daily_history
+from src.data import fetch_daily_history
 
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
 
