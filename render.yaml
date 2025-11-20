@@ -11,4 +11,6 @@ services:
         value: 2
       - key: PYTHONPATH
         value: /opt/render/project/src
+      - key: ALLOWED_ORIGINS
+        value: https://meteo-front-one.vercel.app/,http://localhost:3000,http://localhost:5173
     healthCheckPath: /health
