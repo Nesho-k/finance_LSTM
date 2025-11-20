@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+
+# Cache
+src/cache/
+*.parquet
+
+# Models (optionnel - décommenter si vous ne voulez pas versionner les modèles)
+# models/*.keras
+# models/*.pkl
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

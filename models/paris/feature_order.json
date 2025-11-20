@@ -1,0 +1,14 @@
+[
+  "tavg",
+  "tmin",
+  "tmax",
+  "prcp",
+  "tsun",
+  "month_sin",
+  "month_cos",
+  "day_sin",
+  "day_cos",
+  "tavg_roll_3",
+  "tavg_roll_7",
+  "tsun_roll_7"
+]

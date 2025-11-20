@@ -1,0 +1,25 @@
+# Core dependencies
+python-dateutil
+pytz
+
+# Data processing
+pandas
+numpy
+
+# Machine Learning
+tensorflow
+scikit-learn
+joblib
+
+# Data fetching
+meteostat
+requests
+
+# API
+fastapi
+uvicorn[standard]
+pydantic
+
+# Utilities
+python-multipart
+pyarrow
