@@ -53,6 +53,6 @@ def build_feature_matrix(city: str, feature_order_path: str, window: int = 14) -
     X = feats.tail(window)[order].to_numpy(dtype=np.float32)
     return X
 
-#if __name__ == "__main__":
-#    x = build_feature_matrix("berlin", "models/berlin/feature_order.json", window=30)
-#    print(x.shape)
+if __name__ == "__main__":
+    x = build_feature_matrix("berlin", "models/berlin/feature_order.json", window=30)
+    print(x.shape)

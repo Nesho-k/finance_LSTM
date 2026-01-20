@@ -12,7 +12,7 @@ scikit-learn
 joblib
 
 # Data fetching
-meteostat
+meteostat==1.6.8
 requests
 
 # API
