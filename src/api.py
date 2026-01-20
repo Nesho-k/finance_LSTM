@@ -43,7 +43,7 @@ ALLOWED_ORIGINS = os.getenv(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://meteo-lstm-2.onrender.com"],  # Origines autorisées (frontend)
+    allow_origins=["https://meteo-front-one.vercel.app"],  # Origines autorisées (frontend)
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
