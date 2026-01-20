@@ -34,8 +34,10 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
 ]
 
     out = out[features]
-    out = out.ffill().bfill()
+    out = out.ffill().bfill().fillna(0)
+    # ffill = forward fill, bfill = backward fill, fillna(0) pour les colonnes entièrement NaN
     # ffill = forward fill (remplit à partir de la dernière valeur connue), bfill = backward fill (remplit à partir de la prochaine valeur connue, utile si les premières valeurs sont NaN)
+
 
     return out
 
@@ -45,7 +47,7 @@ def build_feature_matrix(city: str, feature_order_path: str, window: int = 14) -
 
     # Résoudre le chemin relatif à partir de la racine du projet
     if not Path(feature_order_path).is_absolute():
-        project_root = Path(__file__).parent.parent.parent  # remonte de src/ à meteo_app/ à meteo/
+        project_root = Path(__file__).parent.parent  # remonte de src/ à meteo_app/
         feature_order_path = project_root / feature_order_path
 
     with open(feature_order_path) as f:
@@ -53,6 +55,6 @@ def build_feature_matrix(city: str, feature_order_path: str, window: int = 14) -
     X = feats.tail(window)[order].to_numpy(dtype=np.float32)
     return X
 
-if __name__ == "__main__":
-    x = build_feature_matrix("berlin", "models/berlin/feature_order.json", window=30)
-    print(x.shape)
+#if __name__ == "__main__":
+#    x = build_feature_matrix("berlin", "models/berlin/feature_order.json", window=30)
+#    print(x.shape)

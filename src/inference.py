@@ -117,12 +117,12 @@ class WeatherForecaster:
 ####### TEST #######
 
 #if __name__ == "__main__":
-#    """import argparse, pprint
-#    parser = argparse.ArgumentParser()
-#    parser.add_argument("--city", choices=CITIES, default="berlin")
-#    parser.add_argument("--horizon", type=int, default=7)
-#    parser.add_argument("--models_dir", type=str, default="models")
-#    args = parser.parse_args()"""
+    """import argparse, pprint
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--city", choices=CITIES, default="berlin")
+    parser.add_argument("--horizon", type=int, default=7)
+    parser.add_argument("--models_dir", type=str, default="models")
+    args = parser.parse_args()"""
 
 #    f = WeatherForecaster(models_dir=MODELS_DIR)
 #    res = f.predict("berlin", horizon=7)

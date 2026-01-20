@@ -128,7 +128,7 @@ def fetch_daily_history(city: str, days: int = 30) -> pd.DataFrame:
 
 
 ###### TEST #########
-if __name__ == "__main__":
-    df = fetch_daily_history("berlin", days=30)
-    print(f"=== BERLIN ===")
-    print(df.tail(5))
+#if __name__ == "__main__":
+#    df = fetch_daily_history("berlin", days=30)
+#    print(f"=== BERLIN ===")
+#    print(df.tail(5))
