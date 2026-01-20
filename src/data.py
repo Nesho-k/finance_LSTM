@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import time
 
-from meteostat import Point, Daily  
+from meteostat import Point, daily  
 import os
 # Désactiver le cache pickle de Meteostat (on utilise notre propre cache parquet)
 os.environ['METEOSTAT_CACHE_DIR'] = ''
@@ -82,7 +82,7 @@ def fetch_daily_history(city: str, days: int = 30) -> pd.DataFrame:
             me = datetime(end.year, end.month, end.day)
             print(f"[API DEMANDE 📤] Période demandée à Meteostat: {ms.date()} → {me.date()}")
             print(f"[API DEMANDE 📤] Nombre de jours demandés: {(me.date() - ms.date()).days + 1}")
-            df_new = Daily(loc, ms, me).fetch()
+            df_new = daily(loc, ms, me)
             if not df_new.empty:
                 df_new = df_new.reset_index().rename(columns={"time": "time"})
                 df_new["time"] = pd.to_datetime(df_new["time"]).dt.tz_localize(None)
