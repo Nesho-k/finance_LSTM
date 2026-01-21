@@ -23,7 +23,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0=all, 1=info, 2=warning, 3=error on
 #import torch
 #from PIL import Image
 
-#from src.inference import WeatherForecaster, MODELS_DIR, CITIES
+from src.inference import WeatherForecaster, MODELS_DIR, CITIES
 #from src.lecun_model import RN
 
 # Configuration du logging
@@ -59,7 +59,7 @@ app.add_middleware(
 )
 
 # Initialisation du forecaster au démarrage
-#forecaster: WeatherForecaster | None = None
+forecaster: WeatherForecaster | None = None
 
 # --- Chargement du modèle LeCun (reconnaissance de chiffres) ---
 #LECUN_WEIGHTS_PATH = MODELS_DIR / "lecun" / "weights.pt"
