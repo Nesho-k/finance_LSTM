@@ -1,21 +1,27 @@
 # src/api.py
 """
-API FastAPI pour les prédictions météo LSTM
+API FastAPI pour les prédictions météo LSTM et reconnaissance de chiffres (LeCun CNN)
 Fournit des endpoints pour prédire la température à Paris et Berlin
+et pour reconnaître des chiffres manuscrits
 """
 from __future__ import annotations
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Dict, Any
 from datetime import datetime
 import logging
 from pathlib import Path
+import io
 
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0=all, 1=info, 2=warning, 3=error only --> pour ne plus avoir les warnings TensorFlow
 
+import torch
+from PIL import Image
+
 from src.inference import WeatherForecaster, MODELS_DIR, CITIES
+from src.lecun_model import RN
 
 # Configuration du logging
 logging.basicConfig(
@@ -43,7 +49,7 @@ ALLOWED_ORIGINS = os.getenv(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://meteo-front-one.vercel.app"],  # Origines autorisées (frontend)
+    allow_origins=["*"],  # Origines autorisées (frontend)
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -52,15 +58,51 @@ app.add_middleware(
 # Initialisation du forecaster au démarrage
 forecaster: WeatherForecaster | None = None
 
+# --- Chargement du modèle LeCun (reconnaissance de chiffres) ---
+LECUN_WEIGHTS_PATH = MODELS_DIR / "lecun" / "weights.pt"
+lecun_model: RN | None = None
+
+def load_lecun_model():
+    """Charge le modèle LeCun pour la reconnaissance de chiffres"""
+    global lecun_model
+    if not LECUN_WEIGHTS_PATH.exists():
+        logger.warning(f"Poids LeCun non trouvés: {LECUN_WEIGHTS_PATH}")
+        return False
+    lecun_model = RN()
+    lecun_model.load_state_dict(torch.load(LECUN_WEIGHTS_PATH, map_location="cpu", weights_only=True))
+    lecun_model.eval()
+    logger.info("Modèle LeCun chargé avec succès")
+    return True
+
+def preprocess_digit_image(image_bytes: bytes) -> torch.Tensor:
+    """
+    Prétraitement de l'image pour reconnaissance de chiffres:
+    - Conversion en niveaux de gris
+    - Redimensionnement en 28x28
+    - Normalisation entre -1 et 1
+    """
+    image = Image.open(io.BytesIO(image_bytes))
+    image = image.convert("L")
+    image = image.resize((28, 28), Image.Resampling.BOX)
+    tensor = torch.tensor(list(image.getdata()), dtype=torch.float32)
+    tensor = tensor.reshape(28, 28)
+    tensor = (tensor / 255.0) * 2 - 1
+    tensor = tensor.unsqueeze(0).unsqueeze(0)
+    return tensor
+
 
 @app.on_event("startup")
 async def startup_event():
     """Charge les modèles au démarrage de l'application"""
     global forecaster
     try:
-        logger.info("Chargement des modèles...")
+        logger.info("Chargement des modèles météo...")
         forecaster = WeatherForecaster(models_dir=MODELS_DIR)
-        logger.info(f"Modèles chargés avec succès pour les villes: {list(forecaster.artifacts.keys())}")
+        logger.info(f"Modèles météo chargés avec succès pour les villes: {list(forecaster.artifacts.keys())}")
+
+        # Charger le modèle LeCun
+        logger.info("Chargement du modèle LeCun...")
+        load_lecun_model()
     except Exception as e:
         logger.error(f"Erreur lors du chargement des modèles: {e}")
         raise
@@ -217,6 +259,49 @@ async def predict_get(city: str, horizon: int = 7):
     """
     request = PredictionRequest(city=city, horizon=horizon)
     return await predict(request)
+
+
+# --- Endpoints LeCun (reconnaissance de chiffres) ---
+
+@app.post("/lecun/predict", tags=["LeCun"])
+async def lecun_predict(file: UploadFile = File(...)):
+    """
+    Reconnaissance de chiffres manuscrits (0-9).
+    Reçoit une image et retourne la prédiction + scores.
+    """
+    if lecun_model is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Modèle LeCun non chargé"
+        )
+
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Le fichier doit être une image")
+
+    try:
+        image_bytes = await file.read()
+        tensor = preprocess_digit_image(image_bytes)
+
+        with torch.no_grad():
+            logits = lecun_model(tensor)
+
+        scores = logits[0].tolist()
+        prediction = int(torch.argmax(logits, dim=1).item())
+
+        return {"prediction": prediction, "scores": scores}
+
+    except Exception as e:
+        logger.error(f"Erreur LeCun: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/lecun/health", tags=["LeCun"])
+async def lecun_health():
+    """Vérifie que le modèle LeCun est chargé."""
+    return {
+        "status": "ok" if lecun_model is not None else "not_loaded",
+        "model": "LeCun CNN (MNIST)"
+    }
 
 
 # --- Point d'entrée pour exécution directe ---

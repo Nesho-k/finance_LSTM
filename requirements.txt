@@ -10,6 +10,8 @@ numpy
 tensorflow
 scikit-learn
 joblib
+torch
+pillow
 
 # Data fetching
 meteostat==1.6.8
