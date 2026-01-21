@@ -104,8 +104,8 @@ async def startup_event():
         logger.info(f"Modèles météo chargés avec succès pour les villes: {list(forecaster.artifacts.keys())}")
 
         # Charger le modèle LeCun
-        logger.info("Chargement du modèle LeCun...")
-        load_lecun_model()
+        #logger.info("Chargement du modèle LeCun...")
+        #load_lecun_model()
     except Exception as e:
         logger.error(f"Erreur lors du chargement des modèles: {e}")
         raise
