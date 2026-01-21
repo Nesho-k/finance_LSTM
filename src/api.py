@@ -15,13 +15,16 @@ from pathlib import Path
 import io
 
 import os
+
+from meteo_app.src import lecun_model
+from meteo_app.src.lecun_model import RN
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0=all, 1=info, 2=warning, 3=error only --> pour ne plus avoir les warnings TensorFlow
 
-import torch
-from PIL import Image
+#import torch
+#from PIL import Image
 
-from src.inference import WeatherForecaster, MODELS_DIR, CITIES
-from src.lecun_model import RN
+#from src.inference import WeatherForecaster, MODELS_DIR, CITIES
+#from src.lecun_model import RN
 
 # Configuration du logging
 logging.basicConfig(
@@ -56,39 +59,39 @@ app.add_middleware(
 )
 
 # Initialisation du forecaster au démarrage
-forecaster: WeatherForecaster | None = None
+#forecaster: WeatherForecaster | None = None
 
 # --- Chargement du modèle LeCun (reconnaissance de chiffres) ---
-LECUN_WEIGHTS_PATH = MODELS_DIR / "lecun" / "weights.pt"
-lecun_model: RN | None = None
+#LECUN_WEIGHTS_PATH = MODELS_DIR / "lecun" / "weights.pt"
+#lecun_model: RN | None = None
 
-def load_lecun_model():
-    """Charge le modèle LeCun pour la reconnaissance de chiffres"""
-    global lecun_model
-    if not LECUN_WEIGHTS_PATH.exists():
-        logger.warning(f"Poids LeCun non trouvés: {LECUN_WEIGHTS_PATH}")
-        return False
-    lecun_model = RN()
-    lecun_model.load_state_dict(torch.load(LECUN_WEIGHTS_PATH, map_location="cpu", weights_only=True))
-    lecun_model.eval()
-    logger.info("Modèle LeCun chargé avec succès")
-    return True
+#def load_lecun_model():
+#    """Charge le modèle LeCun pour la reconnaissance de chiffres"""
+#    global lecun_model
+#    if not LECUN_WEIGHTS_PATH.exists():
+#        logger.warning(f"Poids LeCun non trouvés: {LECUN_WEIGHTS_PATH}")
+#        return False
+#    lecun_model = RN()
+#    lecun_model.load_state_dict(torch.load(LECUN_WEIGHTS_PATH, map_location="cpu", weights_only=True))
+#    lecun_model.eval()
+#    logger.info("Modèle LeCun chargé avec succès")
+#    return True
 
-def preprocess_digit_image(image_bytes: bytes) -> torch.Tensor:
-    """
-    Prétraitement de l'image pour reconnaissance de chiffres:
-    - Conversion en niveaux de gris
-    - Redimensionnement en 28x28
-    - Normalisation entre -1 et 1
-    """
-    image = Image.open(io.BytesIO(image_bytes))
-    image = image.convert("L")
-    image = image.resize((28, 28), Image.Resampling.BOX)
-    tensor = torch.tensor(list(image.getdata()), dtype=torch.float32)
-    tensor = tensor.reshape(28, 28)
-    tensor = (tensor / 255.0) * 2 - 1
-    tensor = tensor.unsqueeze(0).unsqueeze(0)
-    return tensor
+#def preprocess_digit_image(image_bytes: bytes) -> torch.Tensor:
+#    """
+#    Prétraitement de l'image pour reconnaissance de chiffres:
+#    - Conversion en niveaux de gris
+#    - Redimensionnement en 28x28
+#    - Normalisation entre -1 et 1
+#    """
+#    image = Image.open(io.BytesIO(image_bytes))
+#    image = image.convert("L")
+#    image = image.resize((28, 28), Image.Resampling.BOX)
+#    tensor = torch.tensor(list(image.getdata()), dtype=torch.float32)
+#    tensor = tensor.reshape(28, 28)
+#    tensor = (tensor / 255.0) * 2 - 1
+#    tensor = tensor.unsqueeze(0).unsqueeze(0)
+#    return tensor
 
 
 @app.on_event("startup")
@@ -263,8 +266,8 @@ async def predict_get(city: str, horizon: int = 7):
 
 # --- Endpoints LeCun (reconnaissance de chiffres) ---
 
-@app.post("/lecun/predict", tags=["LeCun"])
-async def lecun_predict(file: UploadFile = File(...)):
+#@app.post("/lecun/predict", tags=["LeCun"])
+#async def lecun_predict(file: UploadFile = File(...)):
     """
     Reconnaissance de chiffres manuscrits (0-9).
     Reçoit une image et retourne la prédiction + scores.
@@ -295,8 +298,8 @@ async def lecun_predict(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/lecun/health", tags=["LeCun"])
-async def lecun_health():
+#@app.get("/lecun/health", tags=["LeCun"])
+#async def lecun_health():
     """Vérifie que le modèle LeCun est chargé."""
     return {
         "status": "ok" if lecun_model is not None else "not_loaded",
