@@ -16,8 +16,8 @@ import io
 
 import os
 
-from meteo_app.src import lecun_model
-from meteo_app.src.lecun_model import RN
+#from meteo_app.src import lecun_model
+#from meteo_app.src.lecun_model import RN
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0=all, 1=info, 2=warning, 3=error only --> pour ne plus avoir les warnings TensorFlow
 
 #import torch
