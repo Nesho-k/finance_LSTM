@@ -1,29 +1,6 @@
-# Core dependencies
-python-dateutil
-pytz
-
-# Data processing
-pandas
-numpy
-
-# Machine Learning
-tensorflow
-scikit-learn
-joblib
-
-# Data fetching
-# [MODIFIÉ] meteostat remplacé par yfinance pour les données financières
-yfinance
-requests
-
-# API
-fastapi
-uvicorn[standard]
-pydantic
-
-# Utilities
-python-multipart
-pyarrow
-matplotlib
+# Frontend Streamlit uniquement — pas de TensorFlow
 streamlit
 plotly
+pandas
+yfinance
+requests

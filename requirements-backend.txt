@@ -1,0 +1,26 @@
+# Backend FastAPI + modèle LSTM — utilisé par Render
+python-dateutil
+pytz
+
+# Data processing
+pandas
+numpy
+
+# Machine Learning
+tensorflow
+scikit-learn
+joblib
+
+# Data fetching
+yfinance
+requests
+
+# API
+fastapi
+uvicorn[standard]
+pydantic
+
+# Utilities
+python-multipart
+pyarrow
+matplotlib
