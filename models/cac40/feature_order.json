@@ -1,0 +1,12 @@
+[
+  "close",
+  "returns",
+  "log_returns",
+  "volatility_5",
+  "ma5",
+  "ma20",
+  "ma60",
+  "rsi",
+  "volume_norm",
+  "hl_range"
+]

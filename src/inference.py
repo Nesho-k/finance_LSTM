@@ -1,129 +1,113 @@
-# au lieu de faire les prédictions dans l'API, on les fait ici 
-# pour éviter d'exposer les modèles et surcharger l'API
+# src/inference.py — Moteur d'inférence LSTM pour la prédiction du CAC 40
+# [MODIFIÉ] WeatherForecaster → FinancialForecaster ; Paris/Berlin → CAC 40
+# La logique de chargement, scaling et dénormalisation est identique à l'original.
 
-# src/inference.py
 from __future__ import annotations
-from pathlib import Path
-from dataclasses import dataclass
+
 import json
-import numpy as np
+import os
+from dataclasses import dataclass
+from pathlib import Path
+
 import joblib
+import numpy as np
 from tensorflow import keras
 
-import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0=all, 1=info, 2=warning, 3=error only --> pour ne plus avoir les warnings TensorFlow
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 from src.features import build_feature_matrix
 
-
-ROOT_DIR = Path(__file__).resolve().parent.parent  # meteo_app/
-MODELS_DIR = ROOT_DIR / "models"  # meteo_app/models/
-
-CITIES = ("berlin", "paris")
+ROOT_DIR   = Path(__file__).resolve().parent.parent
+MODELS_DIR = ROOT_DIR / "models"
+ASSETS     = ("cac40",)          # [MODIFIÉ] "paris"/"berlin" → "cac40"
 
 
 @dataclass
-class CityArtifacts:
-    model: object
-    scaler: object
-    feature_order_path: Path
-    meta: dict
+class AssetArtifacts:
+    model:               object
+    scaler:              object
+    feature_order_path:  Path
+    meta:                dict
 
 
-class WeatherForecaster:
+class FinancialForecaster:
     """
-    Serveur d'inférence (côté Python). À appeler depuis l'API plus tard.
-    Usage:
-        f = WeatherForecaster(models_dir="models")
-        y = f.predict("paris", horizon=7)
+    Moteur d'inférence LSTM pour la prédiction de cours financiers (CAC 40).
+    Interface identique à WeatherForecaster — seul le domaine change.
+
+    Usage :
+        f = FinancialForecaster()
+        result = f.predict("cac40", horizon=5)
     """
+
     def __init__(self, models_dir: str | Path = MODELS_DIR):
         self.models_dir = Path(models_dir)
-        self.artifacts: dict[str, CityArtifacts] = {}
+        self.artifacts: dict[str, AssetArtifacts] = {}
         self._load_artifacts()
 
     def _load_artifacts(self) -> None:
-        for city in CITIES:
-            city_dir = self.models_dir / city
+        for asset in ASSETS:
+            asset_dir = self.models_dir / asset
             try:
-                model = keras.models.load_model(city_dir / "model.keras")
-                scaler = joblib.load(city_dir / "scaler.pkl")
-                feature_order_path = city_dir / "feature_order.json"
-                meta_path = city_dir / "meta.json"
-                meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
+                model              = keras.models.load_model(asset_dir / "model.keras")
+                scaler             = joblib.load(asset_dir / "scaler.pkl")
+                feature_order_path = asset_dir / "feature_order.json"
+                meta_path          = asset_dir / "meta.json"
+                meta               = json.loads(meta_path.read_text()) if meta_path.exists() else {}
             except Exception as e:
-                raise RuntimeError(f"Impossible de charger les artefacts pour {city}: {e}")
+                raise RuntimeError(f"Impossible de charger les artefacts pour {asset}: {e}")
 
-            self.artifacts[city] = CityArtifacts(
+            self.artifacts[asset] = AssetArtifacts(
                 model=model,
                 scaler=scaler,
                 feature_order_path=feature_order_path,
                 meta=meta,
             )
 
-    def _build_X(self, city: str, window: int = 14) -> np.ndarray:
-        a = self.artifacts[city]
-        # récupère 36j (window+6), feature eng, coupe à 30, vérifs internes
-        X = build_feature_matrix(
-            city=city,
+    def _build_X(self, asset: str) -> np.ndarray:
+        a           = self.artifacts[asset]
+        window_size = a.meta.get("window_size", 60)
+        X           = build_feature_matrix(
+            ticker=asset,
             feature_order_path=str(a.feature_order_path),
-            window=window
-        )  # -> (30, n_features), dtype float32
-        # scaling identique à l'entraînement
+            window=window_size,
+        )
+        # Scaling identique à l'entraînement (même logique que WeatherForecaster)
         Xs = a.scaler.transform(X)
         if np.isnan(Xs).any():
-            raise ValueError(f"NaN après scaling pour {city}. Vérifie tes features / scaler.")
+            raise ValueError(f"NaN détectés après scaling pour {asset}. Vérifiez les features / le scaler.")
         return Xs
 
-    def predict(self, city: str, horizon: int = 7) -> dict:
-        city = city.lower()
-        if city not in self.artifacts:
-            raise ValueError("city doit être 'paris' ou 'berlin'")
+    def predict(self, asset: str = "cac40", horizon: int = 5) -> dict:
+        asset = asset.lower()
+        if asset not in self.artifacts:
+            raise ValueError(f"Asset doit être parmi {list(self.artifacts.keys())}")
 
-        # Récupère le window_size depuis meta.json (défaut: 30)
-        window_size = self.artifacts[city].meta.get("window_size", 30)
+        window_size = self.artifacts[asset].meta.get("window_size", 60)
+        Xs          = self._build_X(asset)
+        Xs_batch    = np.expand_dims(Xs, axis=0)   # (1, window_size, n_features)
 
-        Xs = self._build_X(city, window=window_size)            # (window_size, F)
-        Xs_batch = np.expand_dims(Xs, axis=0)                   # (1, window_size, F) - batch de 1 échantillon
+        model  = self.artifacts[asset].model
+        scaler = self.artifacts[asset].scaler
 
-        model = self.artifacts[city].model
-        scaler = self.artifacts[city].scaler
-
-        # Modèle Keras - prédiction directe
-        y_scaled = model.predict(Xs_batch, verbose=0).reshape(-1)  # (H,) - valeurs normalisées
-
-        # Dénormalisation : on prédit uniquement tavg (1ère colonne)
-        # On crée un tableau (H, n_features) avec les prédictions dans la colonne tavg
+        y_scaled   = model.predict(Xs_batch, verbose=0).reshape(-1)  # (H,)
         n_features = Xs.shape[1]
-        y_full = np.zeros((len(y_scaled), n_features))
-        y_full[:, 0] = y_scaled  # tavg est la 1ère colonne
 
-        # Inverse transform pour récupérer les vraies températures
-        y_denorm = scaler.inverse_transform(y_full)[:, 0]  # On garde seulement la colonne tavg
+        # Dénormalisation — identique à WeatherForecaster :
+        # on reconstruit (H, n_features) avec 0 partout sauf colonne 0 (close/tavg)
+        y_full       = np.zeros((len(y_scaled), n_features))
+        y_full[:, 0] = y_scaled
+        y_denorm     = scaler.inverse_transform(y_full)[:, 0]
 
-        y_pred = y_denorm[:horizon].tolist()
-        out = {
-            "city": city,
-            "horizon": horizon,
+        max_h  = self.artifacts[asset].meta.get("horizon", 5)
+        y_pred = y_denorm[:min(horizon, max_h)].tolist()
+
+        return {
+            "asset":       asset,
+            "ticker":      self.artifacts[asset].meta.get("ticker", "^FCHI"),
+            "horizon":     len(y_pred),
             "predictions": y_pred,
-            "n_inputs": int(Xs.shape[0]),
-            "n_features": int(Xs.shape[1]),
-            "meta": self.artifacts[city].meta,
+            "n_inputs":    int(Xs.shape[0]),
+            "n_features":  int(Xs.shape[1]),
+            "meta":        self.artifacts[asset].meta,
         }
-        return out
-    
-
-
-####### TEST #######
-
-#if __name__ == "__main__":
-    """import argparse, pprint
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--city", choices=CITIES, default="berlin")
-    parser.add_argument("--horizon", type=int, default=7)
-    parser.add_argument("--models_dir", type=str, default="models")
-    args = parser.parse_args()"""
-
-#    f = WeatherForecaster(models_dir=MODELS_DIR)
-#    res = f.predict("berlin", horizon=7)
-#    print(res)

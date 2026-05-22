@@ -21,6 +21,9 @@ build/
 # Environment
 .env
 
+# Streamlit secrets (ne jamais committer)
+.streamlit/secrets.toml
+
 # Cache
 src/cache/
 *.parquet

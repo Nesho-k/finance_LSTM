@@ -11,9 +11,9 @@ tensorflow
 scikit-learn
 joblib
 
-
 # Data fetching
-meteostat==1.6.8
+# [MODIFIÉ] meteostat remplacé par yfinance pour les données financières
+yfinance
 requests
 
 # API
@@ -24,3 +24,6 @@ pydantic
 # Utilities
 python-multipart
 pyarrow
+matplotlib
+streamlit
+plotly

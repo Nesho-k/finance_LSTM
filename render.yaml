@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: meteo-api
+    name: cac40-api
     runtime: python
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn src.api:app --host 0.0.0.0 --port $PORT
@@ -12,5 +12,5 @@ services:
       - key: PYTHONPATH
         value: /opt/render/project/src
       - key: ALLOWED_ORIGINS
-        value: https://meteo-front-one.vercel.app/,http://localhost:3000,http://localhost:5173
+        value: http://localhost:8501
     healthCheckPath: /health

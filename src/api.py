@@ -1,322 +1,175 @@
-# src/api.py
-"""
-API FastAPI pour les prédictions météo LSTM et reconnaissance de chiffres (LeCun CNN)
-Fournit des endpoints pour prédire la température à Paris et Berlin
-et pour reconnaître des chiffres manuscrits
-"""
+# src/api.py — API FastAPI pour la prédiction de cours du CAC 40 via LSTM
+# [MODIFIÉ] Contexte météo → finance ; WeatherForecaster → FinancialForecaster
+# Structure des endpoints conservée à l'identique.
+
 from __future__ import annotations
-from fastapi import FastAPI, HTTPException, status, File, UploadFile
+
+import logging
+import os
+from datetime import datetime
+from typing import Any, Dict, List
+
+from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
-from typing import List, Dict, Any
-from datetime import datetime
-import logging
-from pathlib import Path
-import io
 
-import os
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
-#from meteo_app.src import lecun_model
-#from meteo_app.src.lecun_model import RN
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0=all, 1=info, 2=warning, 3=error only --> pour ne plus avoir les warnings TensorFlow
+from src.inference import ASSETS, MODELS_DIR, FinancialForecaster
 
-#import torch
-#from PIL import Image
-
-from src.inference import WeatherForecaster, MODELS_DIR, CITIES
-#from src.lecun_model import RN
-
-# Configuration du logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
-# Initialisation de l'API
+# [MODIFIÉ] Titre et description reflètent le contexte financier
 app = FastAPI(
-    title="Weather Forecast API",
-    description="API de prédiction météo utilisant des modèles LSTM pour Paris et Berlin",
-    version="1.0.0",
+    title="Financial Forecast API — CAC 40 LSTM",
+    description="API de prédiction de cours financiers (CAC 40) via un modèle LSTM entraîné sur 5 ans de données.",
+    version="2.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
 )
 
-# Configuration CORS pour permettre les requêtes depuis le frontend
-# Récupérer les origines autorisées depuis les variables d'environnement
-import os
 ALLOWED_ORIGINS = os.getenv(
     "ALLOWED_ORIGINS",
-    "http://localhost:3000,http://localhost:5173,http://localhost:5174"  # Dev par défaut
+    "http://localhost:3000,http://localhost:5173,http://localhost:5174",
 ).split(",")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Origines autorisées (frontend)
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Initialisation du forecaster au démarrage
-forecaster: WeatherForecaster | None = None
-
-# --- Chargement du modèle LeCun (reconnaissance de chiffres) ---
-#LECUN_WEIGHTS_PATH = MODELS_DIR / "lecun" / "weights.pt"
-#lecun_model: RN | None = None
-
-#def load_lecun_model():
-#    """Charge le modèle LeCun pour la reconnaissance de chiffres"""
-#    global lecun_model
-#    if not LECUN_WEIGHTS_PATH.exists():
-#        logger.warning(f"Poids LeCun non trouvés: {LECUN_WEIGHTS_PATH}")
-#        return False
-#    lecun_model = RN()
-#    lecun_model.load_state_dict(torch.load(LECUN_WEIGHTS_PATH, map_location="cpu", weights_only=True))
-#    lecun_model.eval()
-#    logger.info("Modèle LeCun chargé avec succès")
-#    return True
-
-#def preprocess_digit_image(image_bytes: bytes) -> torch.Tensor:
-#    """
-#    Prétraitement de l'image pour reconnaissance de chiffres:
-#    - Conversion en niveaux de gris
-#    - Redimensionnement en 28x28
-#    - Normalisation entre -1 et 1
-#    """
-#    image = Image.open(io.BytesIO(image_bytes))
-#    image = image.convert("L")
-#    image = image.resize((28, 28), Image.Resampling.BOX)
-#    tensor = torch.tensor(list(image.getdata()), dtype=torch.float32)
-#    tensor = tensor.reshape(28, 28)
-#    tensor = (tensor / 255.0) * 2 - 1
-#    tensor = tensor.unsqueeze(0).unsqueeze(0)
-#    return tensor
+forecaster: FinancialForecaster | None = None
 
 
 @app.on_event("startup")
 async def startup_event():
-    """Charge les modèles au démarrage de l'application"""
     global forecaster
     try:
-        logger.info("Chargement des modèles météo...")
-        forecaster = WeatherForecaster(models_dir=MODELS_DIR)
-        logger.info(f"Modèles météo chargés avec succès pour les villes: {list(forecaster.artifacts.keys())}")
-
-        # Charger le modèle LeCun
-        #logger.info("Chargement du modèle LeCun...")
-        #load_lecun_model()
+        logger.info("Chargement du modèle LSTM CAC 40...")
+        forecaster = FinancialForecaster(models_dir=MODELS_DIR)
+        logger.info(f"Modèle chargé pour les actifs : {list(forecaster.artifacts.keys())}")
     except Exception as e:
-        logger.error(f"Erreur lors du chargement des modèles: {e}")
+        logger.error(f"Erreur lors du chargement du modèle : {e}")
         raise
 
 
-# --- Modèles Pydantic pour la validation ---
+# --- Modèles Pydantic ---
 
 class PredictionRequest(BaseModel):
-    """Modèle de requête pour la prédiction"""
-    city: str = Field(..., description="Ville (paris ou berlin)")
-    horizon: int = Field(7, ge=1, le=14, description="Horizon de prédiction (1-14 jours)")
+    asset:   str = Field("cac40", description="Actif financier (cac40)")
+    horizon: int = Field(5, ge=1, le=5, description="Horizon de prédiction en jours ouvrés (1–5)")
 
-    @field_validator('city')
+    @field_validator("asset")
     @classmethod
-    def validate_city(cls, v: str) -> str:
+    def validate_asset(cls, v: str) -> str:
         v = v.lower()
-        if v not in CITIES:
-            raise ValueError(f"City doit être parmi {CITIES}")
+        if v not in ASSETS:
+            raise ValueError(f"Asset doit être parmi {ASSETS}")
         return v
 
 
 class PredictionResponse(BaseModel):
-    """Modèle de réponse pour la prédiction"""
-    city: str
-    horizon: int
+    asset:       str
+    ticker:      str
+    horizon:     int
     predictions: List[float]
-    n_inputs: int
-    n_features: int
-    meta: Dict[str, Any]
-    timestamp: str
+    n_inputs:    int
+    n_features:  int
+    meta:        Dict[str, Any]
+    timestamp:   str
 
 
 class HealthResponse(BaseModel):
-    """Modèle de réponse pour le health check"""
-    status: str
-    timestamp: str
+    status:        str
+    timestamp:     str
     models_loaded: List[str]
-    version: str
+    version:       str
 
 
 # --- Endpoints ---
 
 @app.get("/", tags=["Root"])
 async def root():
-    """Endpoint racine avec informations de l'API"""
     return {
-        "name": "Weather Forecast API",
-        "version": "1.0.0",
-        "status": "running",
+        "name":    "Financial Forecast API — CAC 40 LSTM",
+        "version": "2.0.0",
+        "status":  "running",
         "endpoints": {
-            "health": "/health",
+            "health":  "/health",
             "predict": "/predict",
-            "cities": "/cities",
-            "docs": "/docs"
-        }
+            "assets":  "/assets",
+            "docs":    "/docs",
+        },
     }
 
 
 @app.get("/health", response_model=HealthResponse, tags=["Health"])
 async def health_check():
-    """
-    Vérifie l'état de santé de l'API et des modèles chargés
-    """
     if forecaster is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Modèles non chargés"
-        )
-
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Modèle non chargé")
     return HealthResponse(
         status="healthy",
         timestamp=datetime.utcnow().isoformat(),
         models_loaded=list(forecaster.artifacts.keys()),
-        version="1.0.0"
+        version="2.0.0",
     )
 
 
-@app.get("/cities", tags=["Info"])
-async def get_cities():
-    """
-    Retourne la liste des villes disponibles avec leurs métadonnées
-    """
+@app.get("/assets", tags=["Info"])
+async def get_assets():
+    """Retourne les actifs disponibles avec leurs métadonnées de performance."""
     if forecaster is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Modèles non chargés"
-        )
-
-    cities_info = {}
-    for city, artifacts in forecaster.artifacts.items():
-        cities_info[city] = {
-            "name": city.capitalize(),
-            "meta": artifacts.meta,
-            "features_count": artifacts.meta.get("n_features", "unknown"),
-            "window_size": artifacts.meta.get("window_size", "unknown"),
-            "max_horizon": artifacts.meta.get("horizon", 7)
-        }
-
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Modèle non chargé")
     return {
-        "cities": cities_info,
-        "total": len(cities_info)
+        "assets": {
+            asset: {
+                "name":        artifacts.meta.get("asset", asset.upper()),
+                "ticker":      artifacts.meta.get("ticker", "^FCHI"),
+                "window_size": artifacts.meta.get("window_size", 60),
+                "horizon":     artifacts.meta.get("horizon", 5),
+                "metrics":     artifacts.meta.get("metrics", {}),
+            }
+            for asset, artifacts in forecaster.artifacts.items()
+        }
     }
 
 
 @app.post("/predict", response_model=PredictionResponse, tags=["Prediction"])
 async def predict(request: PredictionRequest):
     """
-    Effectue une prédiction météo pour une ville donnée
+    Prédit les cours du CAC 40 pour les N prochains jours ouvrés.
 
-    - **city**: Ville pour laquelle faire la prédiction (paris ou berlin)
-    - **horizon**: Nombre de jours à prédire (1-14, par défaut 7)
-
-    Retourne les températures moyennes prédites pour les N prochains jours
+    - **asset** : actif financier (cac40)
+    - **horizon** : nombre de jours à prédire (1–5, défaut 5)
     """
     if forecaster is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Modèles non chargés"
-        )
-
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Modèle non chargé")
     try:
-        logger.info(f"Prédiction demandée pour {request.city}, horizon={request.horizon}")
-
-        # Effectue la prédiction
-        result = forecaster.predict(city=request.city, horizon=request.horizon)
-
-        # Ajoute le timestamp
+        logger.info(f"Prédiction demandée — asset={request.asset}, horizon={request.horizon}")
+        result = forecaster.predict(asset=request.asset, horizon=request.horizon)
         result["timestamp"] = datetime.utcnow().isoformat()
-
-        logger.info(f"Prédiction réussie pour {request.city}")
         return PredictionResponse(**result)
-
     except ValueError as e:
-        logger.error(f"Erreur de validation: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        logger.error(f"Erreur lors de la prédiction: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur interne: {str(e)}"
-        )
+        logger.error(f"Erreur prédiction : {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erreur interne : {str(e)}")
 
 
-@app.get("/predict/{city}", response_model=PredictionResponse, tags=["Prediction"])
-async def predict_get(city: str, horizon: int = 7):
-    """
-    Endpoint GET alternatif pour les prédictions (pour faciliter les tests)
-
-    - **city**: Ville (paris ou berlin)
-    - **horizon**: Nombre de jours (1-14, par défaut 7)
-    """
-    request = PredictionRequest(city=city, horizon=horizon)
+@app.get("/predict/{asset}", response_model=PredictionResponse, tags=["Prediction"])
+async def predict_get(asset: str, horizon: int = 5):
+    """Endpoint GET alternatif (facilite les tests rapides)."""
+    request = PredictionRequest(asset=asset, horizon=horizon)
     return await predict(request)
 
 
-# --- Endpoints LeCun (reconnaissance de chiffres) ---
-
-#@app.post("/lecun/predict", tags=["LeCun"])
-#async def lecun_predict(file: UploadFile = File(...)):
-    """
-    Reconnaissance de chiffres manuscrits (0-9).
-    Reçoit une image et retourne la prédiction + scores.
-    """
-    if lecun_model is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Modèle LeCun non chargé"
-        )
-
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Le fichier doit être une image")
-
-    try:
-        image_bytes = await file.read()
-        tensor = preprocess_digit_image(image_bytes)
-
-        with torch.no_grad():
-            logits = lecun_model(tensor)
-
-        scores = logits[0].tolist()
-        prediction = int(torch.argmax(logits, dim=1).item())
-
-        return {"prediction": prediction, "scores": scores}
-
-    except Exception as e:
-        logger.error(f"Erreur LeCun: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-#@app.get("/lecun/health", tags=["LeCun"])
-#async def lecun_health():
-    """Vérifie que le modèle LeCun est chargé."""
-    return {
-        "status": "ok" if lecun_model is not None else "not_loaded",
-        "model": "LeCun CNN (MNIST)"
-    }
-
-
-# --- Point d'entrée pour exécution directe ---
-
 if __name__ == "__main__":
     import uvicorn
-
-    # Configuration du serveur
-    uvicorn.run(
-        "api:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,  # Auto-reload en développement
-        log_level="info"
-    )
+    uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True, log_level="info")
