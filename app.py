@@ -86,14 +86,23 @@ def api_predict(horizon: int) -> dict | None:
 # ── Données historiques (yfinance directement côté Streamlit) ─────────────────
 @st.cache_data(ttl=3600, show_spinner="Chargement des données CAC 40…")
 def load_history() -> pd.DataFrame:
-    raw = yf.download("^FCHI", period="1y", auto_adjust=True, progress=False)
-    raw = raw.reset_index()
-    if isinstance(raw.columns, pd.MultiIndex):
-        raw.columns = [col[0].lower() for col in raw.columns]
-    else:
-        raw.columns = [str(c).lower() for c in raw.columns]
-    raw["date"] = pd.to_datetime(raw["date"])
-    return raw[["date", "close"]].dropna().reset_index(drop=True)
+    try:
+        raw = yf.download("^FCHI", period="1y", auto_adjust=True, progress=False)
+        if raw is None or raw.empty:
+            raise ValueError("yfinance a retourné un DataFrame vide.")
+        raw = raw.reset_index()
+        if isinstance(raw.columns, pd.MultiIndex):
+            raw.columns = [col[0].lower() for col in raw.columns]
+        else:
+            raw.columns = [str(c).lower() for c in raw.columns]
+        raw["date"] = pd.to_datetime(raw["date"])
+        df = raw[["date", "close"]].dropna().reset_index(drop=True)
+        if df.empty:
+            raise ValueError("Aucune donnée apres nettoyage.")
+        return df
+    except Exception as e:
+        st.error(f"Impossible de charger les donnees CAC 40 : {e}")
+        st.stop()
 
 
 def next_trading_days(last: pd.Timestamp, n: int) -> list[pd.Timestamp]:
